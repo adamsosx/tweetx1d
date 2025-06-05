@@ -1,46 +1,38 @@
 import tweepy
 import requests
 import json
-import os
+import os # Dodano import os do odczytu zmiennych środowiskowych
 from datetime import datetime
-import time
+# import time # Już niepotrzebny dla głównej logiki
 import logging
 
 # Konfiguracja logowania
-LOG_FILENAME = 'radar_twitter_bot.log'
+LOG_FILENAME = 'bot.log' # Możesz rozważyć zmianę nazwy pliku logu, jeśli chcesz
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(LOG_FILENAME),
-        logging.StreamHandler() # Dodatkowo loguje do konsoli
+        logging.StreamHandler() # Dodatkowo loguje do konsoli, przydatne w GitHub Actions
     ]
 )
 
-# --- Konfiguracja ---
-# Klucze API Twittera - odczytywane ze zmiennych środowiskowych
-API_KEY = os.getenv("TWITTER_API_KEY")
-API_SECRET = os.getenv("TWITTER_API_SECRET")
-ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
-ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+# Odczyt kluczy API ze zmiennych środowiskowych
+API_KEY_ENV = os.getenv("TWITTER_API_KEY")
+API_SECRET_ENV = os.getenv("TWITTER_API_SECRET")
+ACCESS_TOKEN_ENV = os.getenv("TWITTER_ACCESS_TOKEN")
+ACCESS_TOKEN_SECRET_ENV = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+
 
 # Endpoint radar.fun
-RADAR_API_TIMEFRAME = "1d" # ZMIANA: Ustawienie timeframe na 1 dzień
-RADAR_API_URL = f"https://radar.fun/api/tokens/most-called?timeframe={RADAR_API_TIMEFRAME}" # URL zostanie automatycznie zaktualizowany
-
-# Interwał sprawdzania i tweetowania (w sekundach)
-# 6 godzin = 6 * 60 * 60 sekund (pozostawiamy interwał działania bota bez zmian, chyba że chcesz to też zmienić)
-CHECK_INTERVAL_SECONDS = 6 * 3600 
-
-# --- Funkcje ---
+RADAR_API_URL = "https://radar.fun/api/tokens/most-called?timeframe=1d"
 
 def get_top_tokens():
-    """Pobiera dane z API radar.fun i zwraca top 3 tokeny."""
+    """Pobiera dane z API radar.fun i zwraca top 3 tokeny"""
     logging.info(f"Fetching top tokens from {RADAR_API_URL}")
     try:
-        # UWAGA: verify=False wyłącza weryfikację certyfikatu SSL.
-        # Jest to potencjalnie niebezpieczne i powinno być używane tylko jeśli jesteś pewien ryzyka
-        # lub w środowisku testowym. W produkcji postaraj się rozwiązać problemy z certyfikatem.
+        # Pobieramy dane z wyłączeniem weryfikacji SSL
+        # UWAGA: verify=False jest potencjalnie niebezpieczne. Rozważ rozwiązanie problemu z certyfikatem.
         response = requests.get(RADAR_API_URL, verify=False, timeout=30) # Dodano timeout
         response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP (4xx lub 5xx)
         data = response.json()
@@ -49,26 +41,13 @@ def get_top_tokens():
             logging.error(f"Unexpected data format from API. Expected list, got {type(data)}.")
             return None
 
-        # Sortujemy tokeny według liczby wywołań w ostatnim okresie (zgodnym z timeframe)
-        # Zakładamy, że API zwraca pole np. 'calls_1d' dla timeframe="1d"
-        sort_key = f"calls_{RADAR_API_TIMEFRAME}" 
-        
-        # Sprawdzenie czy klucz sortowania istnieje w pierwszym elemencie (jeśli dane istnieją)
-        if data and sort_key not in data[0]:
-            logging.warning(f"Sort key '{sort_key}' not found in API response. Falling back to 'calls_1h'. Available keys: {data[0].keys() if data else 'None'}")
-            sort_key = 'calls_1h' # Fallback, jeśli klucz dynamiczny nie istnieje
-            if data and sort_key not in data[0]: # Sprawdzenie fallbacku
-                 logging.error(f"Fallback sort key '{sort_key}' also not found. Cannot sort.")
-                 return None
-
-
-        sorted_tokens = sorted(data, key=lambda x: x.get(sort_key, 0), reverse=True)
+        # Sortujemy tokeny według liczby wywołań w ostatnim dniu (calls1d)
+        sorted_tokens = sorted(data, key=lambda x: x.get('calls_1d', x.get('calls1d', 0)), reverse=True) # Użyj calls_1d lub calls1d jako klucza
         
         # Bierzemy top 3 tokeny
         top_3 = sorted_tokens[:3]
         logging.info(f"Successfully fetched and sorted top {len(top_3)} tokens.")
         return top_3
-        
     except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching data from radar.fun API (RequestException): {e}")
         return None
@@ -81,15 +60,11 @@ def get_top_tokens():
 
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens"""
-    # Nagłówek tweeta jest już ustawiony na "1D", co jest zgodne z nowym RADAR_API_TIMEFRAME
-    tweet = "Top 3 Most Called Tokens (1D)\n\n" 
+    tweet = "Top3 Most Called Tokens (1d)\n\n"
     
-    # Klucz do pobrania liczby wywołań z API dla timeframe "1d"
-    calls_data_key = f"calls_{RADAR_API_TIMEFRAME}" # Będzie "calls_1d"
-
     for i, token in enumerate(top_3_tokens, 1):
-        # ZMIANA: Użycie dynamicznego klucza do pobrania liczby wywołań dla "1d"
-        calls = token.get(calls_data_key, 0) 
+        # Zgodnie z Twoim kodem, używamy 'unique_channels' dla liczby "calls" w tweecie
+        calls = token.get('unique_channels', 0) 
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided') 
         
@@ -103,71 +78,61 @@ def format_tweet(top_3_tokens):
         tweet += f"   {calls} calls\n\n"
     
     # Add footer with SOL and outlight.fun
-    tweet += "\n outlight.fun\n" # Stopka pozostaje bez zmian
+    tweet += "\n outlight.fun\n"
     
     return tweet
 
 def main():
-    logging.info("Starting Radar.fun Twitter Bot...")
-
+    logging.info("Starting X Bot (single run for scheduled task)...")
+    
     # Sprawdzenie, czy wszystkie klucze API są ustawione
-    if not all([API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET]):
+    if not all([API_KEY_ENV, API_SECRET_ENV, ACCESS_TOKEN_ENV, ACCESS_TOKEN_SECRET_ENV]):
         logging.error("Twitter API credentials not found in environment variables. Exiting.")
         print("Error: Twitter API credentials (TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET) must be set as environment variables.")
-        return
+        exit(1) # Zakończ z błędem
 
+    # Utwórz klienta API v2 raz na początku
     try:
         client = tweepy.Client(
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET
+            consumer_key=API_KEY_ENV,
+            consumer_secret=API_SECRET_ENV,
+            access_token=ACCESS_TOKEN_ENV,
+            access_token_secret=ACCESS_TOKEN_SECRET_ENV
         )
-        # Weryfikacja poświadczeń (opcjonalnie, ale dobrze sprawdzić na starcie)
+        # Weryfikacja poświadczeń
         me = client.get_me()
         logging.info(f"Successfully authenticated with Twitter as @{me.data.username}")
-
     except Exception as e:
         logging.error(f"Error creating Twitter client or authenticating: {e}")
-        return
+        exit(1) # Zakończ z błędem
 
-    while True:
-        try:
-            logging.info("Attempting to fetch tokens and tweet...")
-            top_3 = get_top_tokens()
-            
-            if not top_3:
-                logging.warning("No token data received or could not sort. Skipping tweet.")
-            else:
-                tweet_text = format_tweet(top_3)
-                logging.info("Prepared tweet:\n" + "="*20 + f"\n{tweet_text}\n" + "="*20)
+    # Główna logika bota - wykonuje się raz
+    try:
+        # Pobierz top 3 tokeny
+        top_3 = get_top_tokens()
+        if not top_3:
+            logging.error("Failed to fetch data from API or no data to process. Exiting.")
+            exit(1) # Zakończ z błędem
 
-                # Wyślij tweet
-                response = client.create_tweet(text=tweet_text)
-                tweet_id = response.data['id']
-                logging.info(f"Tweet sent successfully! Tweet ID: {tweet_id}, Link: https://twitter.com/user/status/{tweet_id}")
-            
-            logging.info(f"Waiting for {CHECK_INTERVAL_SECONDS // 3600} hours before next cycle...")
-            time.sleep(CHECK_INTERVAL_SECONDS)
+        # Utwórz tweet
+        tweet_text = format_tweet(top_3)
+        logging.info("Prepared tweet:\n" + "="*20 + f"\n{tweet_text}\n" + "="*20)
 
-        except tweepy.TweepyException as e:
-            logging.error(f"Twitter API error: {e}")
-            # Różne błędy mogą wymagać różnego czasu oczekiwania
-            if hasattr(e, 'api_codes') and e.api_codes:
-                if 187 in e.api_codes: # Status is a duplicate
-                    logging.warning("Tweet is a duplicate. Waiting longer before retrying.")
-                    time.sleep(CHECK_INTERVAL_SECONDS // 2) # Poczekaj połowę normalnego interwału
-                elif 429 in e.api_codes: # Rate limit
-                    logging.warning("Rate limit exceeded. Waiting for 15 minutes.")
-                    time.sleep(15 * 60)
-                else:
-                    time.sleep(5 * 60) # Domyślny czas oczekiwania przy innych błędach Tweepy
-            else:
-                 time.sleep(5 * 60)
-        except Exception as e:
-            logging.error(f"An unexpected error occurred in the main loop: {e}")
-            logging.info("Waiting for 5 minutes before retrying...")
-            time.sleep(300) # 300 sekund = 5 minut
+
+        # Wyślij tweet
+        response = client.create_tweet(text=tweet_text)
+        tweet_id = response.data['id']
+        logging.info(f"Tweet sent successfully! Tweet ID: {tweet_id}, Link: https://twitter.com/user/status/{tweet_id}")
+        
+    except tweepy.TweepyException as e:
+        logging.error(f"Twitter API error during tweet process: {e}")
+        # Można dodać bardziej szczegółową obsługę błędów Tweepy, np. duplikaty
+        exit(1) # Zakończ z błędem
+    except Exception as e:
+        logging.error(f"An unexpected error occurred in the main task: {e}")
+        exit(1) # Zakończ z błędem
+
+    logging.info("X Bot (single run) finished successfully.")
 
 if __name__ == "__main__":
     main()
