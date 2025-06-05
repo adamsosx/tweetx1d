@@ -3,10 +3,8 @@ import requests
 import json
 import os # Dodano import os do odczytu zmiennych środowiskowych
 from datetime import datetime
-# import time # Już niepotrzebny dla głównej logiki
 import logging
 
-# Konfiguracja logowania
 LOG_FILENAME = 'bot.log' # Możesz rozważyć zmianę nazwy pliku logu, jeśli chcesz
 logging.basicConfig(
     level=logging.INFO,
@@ -17,22 +15,18 @@ logging.basicConfig(
     ]
 )
 
-# Odczyt kluczy API ze zmiennych środowiskowych
 API_KEY_ENV = os.getenv("TWITTER_API_KEY")
 API_SECRET_ENV = os.getenv("TWITTER_API_SECRET")
 ACCESS_TOKEN_ENV = os.getenv("TWITTER_ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET_ENV = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 
-# Endpoint radar.fun
 RADAR_API_URL = "https://radar.fun/api/tokens/most-called?timeframe=1d"
 
 def get_top_tokens():
     """Pobiera dane z API radar.fun i zwraca top 3 tokeny"""
     logging.info(f"Fetching top tokens from {RADAR_API_URL}")
     try:
-        # Pobieramy dane z wyłączeniem weryfikacji SSL
-        # UWAGA: verify=False jest potencjalnie niebezpieczne. Rozważ rozwiązanie problemu z certyfikatem.
         response = requests.get(RADAR_API_URL, verify=False, timeout=30) # Dodano timeout
         response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP (4xx lub 5xx)
         data = response.json()
@@ -41,10 +35,8 @@ def get_top_tokens():
             logging.error(f"Unexpected data format from API. Expected list, got {type(data)}.")
             return None
 
-        # Sortujemy tokeny według liczby wywołań w ostatnim dniu (calls1d)
         sorted_tokens = sorted(data, key=lambda x: x.get('calls_1d', x.get('calls1d', 0)), reverse=True) # Użyj calls_1d lub calls1d jako klucza
         
-        # Bierzemy top 3 tokeny
         top_3 = sorted_tokens[:3]
         logging.info(f"Successfully fetched and sorted top {len(top_3)} tokens.")
         return top_3
@@ -60,10 +52,9 @@ def get_top_tokens():
 
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens"""
-    tweet = "Top3 Most Called Tokens (1d)\n\n"
+    tweet = "Top3 Most Called Tokens (1D)\n\n"
     
     for i, token in enumerate(top_3_tokens, 1):
-        # Zgodnie z Twoim kodem, używamy 'unique_channels' dla liczby "calls" w tweecie
         calls = token.get('unique_channels', 0) 
         symbol = token.get('symbol', 'Unknown')
         address = token.get('address', 'No Address Provided') 
@@ -77,7 +68,6 @@ def format_tweet(top_3_tokens):
         # Format: "   X calls" with two newlines after
         tweet += f"   {calls} calls\n\n"
     
-    # Add footer with SOL and outlight.fun
     tweet += "\n outlight.fun\n"
     
     return tweet
@@ -85,13 +75,11 @@ def format_tweet(top_3_tokens):
 def main():
     logging.info("Starting X Bot (single run for scheduled task)...")
     
-    # Sprawdzenie, czy wszystkie klucze API są ustawione
     if not all([API_KEY_ENV, API_SECRET_ENV, ACCESS_TOKEN_ENV, ACCESS_TOKEN_SECRET_ENV]):
         logging.error("Twitter API credentials not found in environment variables. Exiting.")
         print("Error: Twitter API credentials (TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET) must be set as environment variables.")
         exit(1) # Zakończ z błędem
 
-    # Utwórz klienta API v2 raz na początku
     try:
         client = tweepy.Client(
             consumer_key=API_KEY_ENV,
@@ -99,14 +87,12 @@ def main():
             access_token=ACCESS_TOKEN_ENV,
             access_token_secret=ACCESS_TOKEN_SECRET_ENV
         )
-        # Weryfikacja poświadczeń
         me = client.get_me()
         logging.info(f"Successfully authenticated with Twitter as @{me.data.username}")
     except Exception as e:
         logging.error(f"Error creating Twitter client or authenticating: {e}")
         exit(1) # Zakończ z błędem
 
-    # Główna logika bota - wykonuje się raz
     try:
         # Pobierz top 3 tokeny
         top_3 = get_top_tokens()
