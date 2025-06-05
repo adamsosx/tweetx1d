@@ -35,7 +35,7 @@ def get_top_tokens():
             logging.error(f"Unexpected data format from API. Expected list, got {type(data)}.")
             return None
 
-        sorted_tokens = sorted(data, key=lambda x: x.get('calls_1d', x.get('calls1d', 0)), reverse=True) # Użyj calls_1d lub calls1d jako klucza
+        sorted_tokens = sorted(data, key=lambda x: x.get('unique_channels', 0), reverse=True)
         
         top_3 = sorted_tokens[:3]
         logging.info(f"Successfully fetched and sorted top {len(top_3)} tokens.")
