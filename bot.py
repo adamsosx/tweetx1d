@@ -21,13 +21,13 @@ ACCESS_TOKEN_ENV = os.getenv("TWITTER_ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET_ENV = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 
 
-RADAR_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1d"
+OUTLIGHT_API_URL = "https://outlight.fun/api/tokens/most-called?timeframe=1d"
 
 def get_top_tokens():
-    """Pobiera dane z API radar.fun i zwraca top 3 tokeny"""
-    logging.info(f"Fetching top tokens from {RADAR_API_URL}")
+    """Pobiera dane z API outlight.fun i zwraca top 3 tokeny"""
+    logging.info(f"Fetching top tokens from {OUTLIGHT_API_URL}")
     try:
-        response = requests.get(RADAR_API_URL, verify=False, timeout=30) # Dodano timeout
+        response = requests.get(OUTLIGHT_API_URL, verify=False, timeout=30) # Dodano timeout
         response.raise_for_status()  # Wywoła wyjątek dla kodów błędu HTTP (4xx lub 5xx)
         data = response.json()
         
@@ -41,10 +41,10 @@ def get_top_tokens():
         logging.info(f"Successfully fetched and sorted top {len(top_3)} tokens.")
         return top_3
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching data from radar.fun API (RequestException): {e}")
+        logging.error(f"Error fetching data from outlight.fun API (RequestException): {e}")
         return None
     except json.JSONDecodeError as e:
-        logging.error(f"Error decoding JSON from radar.fun API: {e}")
+        logging.error(f"Error decoding JSON from outlight.fun API: {e}")
         return None
     except Exception as e:
         logging.error(f"An unexpected error occurred in get_top_tokens: {e}")
@@ -52,7 +52,7 @@ def get_top_tokens():
 
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens"""
-    tweet = "Top3 Most Called Tokens (1d)\n\n" # Zmieniono z 6h na 1d, aby pasowało do RADAR_API_URL
+    tweet = "Top3 Most Called Tokens (1d)\n\n" # Zmieniono z 6h na 1d, aby pasowało do OUTLIGHT_API_URL
     
     for i, token in enumerate(top_3_tokens, 1):
         calls = token.get('unique_channels', 0) 
