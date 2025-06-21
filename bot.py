@@ -52,7 +52,7 @@ def get_top_tokens():
 
 def format_tweet(top_3_tokens):
     """Format tweet with top 3 tokens (tylko calls z win_rate > 30%)"""
-    tweet = f"🚀Top 3 Most Called Tokens (1d)\n\n"
+    tweet = f"🚀Top 3 Most 📞 1d\n\n"
     medals = ['🥇', '🥈', '🥉']
     for i, token in enumerate(top_3_tokens, 0):
         calls = token.get('filtered_calls', 0)
